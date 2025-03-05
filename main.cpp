@@ -2,9 +2,9 @@
 #include "SFML/Graphics/RenderWindow.hpp"
 #include "SFML/System/Vector2.hpp"
 #include <SFML/Graphics.hpp>
-#include <cmath>
 #include <iostream>
 #include <vector>
+
 using namespace std;
 using namespace sf;
 
@@ -23,7 +23,7 @@ const int BOXES_COL = (HEIGHT - 2 * PADDING_TOP_BOTTOM) / SQUARE_BOX;
 int startingPointX = 5;
 int startingPointY = 10;
 int endingPointX = 30;
-int endingPointY = 20;
+int endingPointY = 10;
 
 enum Dir { up = 1, down, left, right };
 
@@ -38,9 +38,9 @@ struct MinimumPoint {
   int distance;
 };
 
-bool allVisited(bool (&visitedRecord)[BOXES_COL][BOXES_ROW]) {
+bool allVisited(bool (&visitedRecord)[BOXES_ROW][BOXES_COL]) {
 
-  for (int i = 0; i < BOXES_COL; i++) {
+  for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
       if (visitedRecord[i][j] == false)
         return false;
@@ -51,12 +51,12 @@ bool allVisited(bool (&visitedRecord)[BOXES_COL][BOXES_ROW]) {
 }
 
 struct MinimumPoint
-minimumUnvisited(int (&distance)[BOXES_COL][BOXES_ROW],
-                 bool (&visitedRecord)[BOXES_COL][BOXES_ROW]) {
+minimumUnvisited(int (&distance)[BOXES_ROW][BOXES_COL],
+                 bool (&visitedRecord)[BOXES_ROW][BOXES_COL]) {
 
   MinimumPoint shortest = {0, 0, INT_MAX};
 
-  for (int i = 0; i < BOXES_COL; i++) {
+  for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
       if (distance[i][j] < shortest.distance && !visitedRecord[i][j]) {
         shortest = {i, j, distance[i][j]};
@@ -67,8 +67,8 @@ minimumUnvisited(int (&distance)[BOXES_COL][BOXES_ROW],
 }
 
 void walk(Dir direction, MinimumPoint node,
-          int (&distance)[BOXES_COL][BOXES_ROW],
-          Point (&prev)[BOXES_COL][BOXES_ROW]) {
+          int (&distance)[BOXES_ROW][BOXES_COL],
+          Point (&prev)[BOXES_ROW][BOXES_COL]) {
 
   Point p;
   if (direction == Dir::up) {
@@ -81,28 +81,29 @@ void walk(Dir direction, MinimumPoint node,
     p = {node.x + 1, node.y};
   }
 
-  if (p.x > BOXES_ROW || p.x < 0 || p.y > BOXES_COL || p.y < 0) {
+  if (p.x > BOXES_ROW - 1 || p.x < 0 || p.y > BOXES_COL - 1 || p.y < 0) {
     return;
   }
 
   if (distance[p.x][p.y] > node.distance + 1) {
+    cout << node.distance + 1 << " For " << p.x << " " << p.y << endl;
     distance[p.x][p.y] = node.distance + 1;
     prev[p.x][p.y] = {node.x, node.y};
   }
 }
 
 int dijkstra(Point start, vector<Point> &animationBuffer) {
-  bool visitedRecord[BOXES_COL][BOXES_ROW];
-  int distance[BOXES_COL][BOXES_ROW];
-  Point prev[BOXES_COL][BOXES_ROW];
+  bool visitedRecord[BOXES_ROW][BOXES_COL];
+  int distance[BOXES_ROW][BOXES_COL];
+  Point prev[BOXES_ROW][BOXES_COL];
 
-  for (int i = 0; i < BOXES_COL; i++) {
+  for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
       visitedRecord[i][j] = false;
     }
   }
 
-  for (int i = 0; i < BOXES_COL; i++) {
+  for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
       distance[i][j] = INT_MAX;
     }
@@ -113,7 +114,7 @@ int dijkstra(Point start, vector<Point> &animationBuffer) {
   while (!allVisited(visitedRecord)) {
     loopCounter++;
     MinimumPoint node = minimumUnvisited(distance, visitedRecord);
-    cout << node.x << " " << node.y << endl;
+    // cout << node.x << " " << node.y << endl;
 
     if (node.distance == INT_MAX)
       break;
@@ -126,21 +127,25 @@ int dijkstra(Point start, vector<Point> &animationBuffer) {
     visitedRecord[node.x][node.y] = true;
     if (node.x == endingPointX && node.y == endingPointY) {
       // found the node
+      cout << "Found " << distance[node.x][node.y] << endl;
       break;
     } else {
       animationBuffer.push_back({node.x, node.y});
     }
   }
-  return loopCounter + distance[endingPointX][endingPointY] + 1;
+  if (allVisited(visitedRecord)) {
+    cout << "All" << endl;
+  }
+  return distance[endingPointX][endingPointY] + 1;
 }
 
-void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_COL][BOXES_ROW]) {
+void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
 
   int startX = PADDING_LEFT_RIGHT;
   int startY = PADDING_TOP_BOTTOM;
 
-  for (int j = 0; j < BOXES_COL; j++) {
-    for (int i = 0; i < BOXES_ROW; i++) {
+  for (int i = 0; i < BOXES_ROW; i++) {
+    for (int j = 0; j < BOXES_COL; j++) {
 
       int x = startX + i * SQUARE_BOX;
       int y = startY + j * SQUARE_BOX;
@@ -175,12 +180,12 @@ void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_COL][BOXES_ROW]) {
   }
 }
 
-void initGraph(IntRect (&graph)[BOXES_COL][BOXES_ROW]) {
+void initGraph(IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
   int startX = PADDING_LEFT_RIGHT;
   int startY = PADDING_TOP_BOTTOM;
 
-  for (int j = 0; j < BOXES_COL; j++) {
-    for (int i = 0; i < BOXES_ROW; i++) {
+  for (int j = 0; j < BOXES_ROW; j++) {
+    for (int i = 0; i < BOXES_COL; i++) {
 
       int x = startX + i * SQUARE_BOX;
       int y = startY + j * SQUARE_BOX;
@@ -191,34 +196,38 @@ void initGraph(IntRect (&graph)[BOXES_COL][BOXES_ROW]) {
   }
 }
 
-void drawAnimation(RenderWindow *window, vector<Point> &animationBuffer) {
+void drawAnimation(RenderWindow *window, vector<Point> &animationBuffer,
+                   int counter) {
 
-  for (int i = 0; i < animationBuffer.size(); i++) {
-
+  for (int i = 0; i < animationBuffer.size() && i < counter; i++) {
     Point p = animationBuffer[i];
-
     int startX = PADDING_LEFT_RIGHT;
     int startY = PADDING_TOP_BOTTOM;
 
     int x = startX + p.x * SQUARE_BOX;
     int y = startY + p.y * SQUARE_BOX;
 
-    sf::RectangleShape drawableRect1(
-        sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
-    drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
-    drawableRect1.setFillColor(sf::Color::Yellow);
+    if (!(p.x == startingPointX && p.y == startingPointY) &&
+        !(p.x == endingPointX && p.y == endingPointY)) {
+      sf::RectangleShape drawableRect1(
+          sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
+      drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
+      drawableRect1.setFillColor(sf::Color::Yellow);
+      window->draw(drawableRect1);
+    }
   }
 }
 
 int main() {
 
   RenderWindow window(sf::VideoMode({WIDTH, HEIGHT}), "Path Finding Algorithm");
-  IntRect graph[BOXES_COL][BOXES_ROW];
+  IntRect graph[BOXES_ROW][BOXES_COL];
 
   initGraph(graph);
   vector<Point> animationBuffer;
   cout << dijkstra({startingPointX, startingPointY}, animationBuffer);
-
+  int counter = 0;
+  int speed = 0;
   while (window.isOpen()) {
     while (const std::optional event = window.pollEvent()) {
       if (event->is<Event::Closed>())
@@ -231,7 +240,12 @@ int main() {
     drawGrid(&window, graph);
 
     // starting and ending point
-    // drawAnimation(&window, animationBuffer);
+    drawAnimation(&window, animationBuffer, counter);
+
+    if (speed % 3 == 0) {
+      counter++;
+    }
+    speed++;
 
     // Draw Stop
     window.display();
