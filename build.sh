@@ -1,3 +1,2 @@
-#!/bin/bash
-g++ $1 -o out -I/opt/homebrew/Cellar/sfml/3.0.0_1/include -L/opt/homebrew/Cellar/sfml/3.0.0_1/lib -std=c++20 -lsfml-graphics -lsfml-window -lsfml-system -lsfml-audio
-./out
+gg++ -std=c++17 -c main.cpp -I"C:\Users\aayus\Documents\libraries\SFML-3.0.0\include"  
+g++ -std=c++17 main.cpp -I"C:\Users\aayus\Documents\libraries\SFML-3.0.0\include" -L"C:\Users\aayus\Documents\libraries\SFML-3.0.0\lib" -DSFML_STATIC -lsfml-graphics-s -lsfml-window-s -lsfml-system-s -lopengl32 -lwinmm -lgdi32 -o main.exe
