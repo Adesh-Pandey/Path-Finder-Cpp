@@ -38,11 +38,12 @@ struct MinimumPoint {
   int distance;
 };
 
-bool allVisited(bool (&visitedRecord)[BOXES_ROW][BOXES_COL]) {
+bool allVisited(bool (&visitedRecord)[BOXES_ROW][BOXES_COL],
+                bool (&walled)[BOXES_ROW][BOXES_COL]) {
 
   for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
-      if (visitedRecord[i][j] == false)
+      if (visitedRecord[i][j] == false && !walled[i][j])
         return false;
     }
   }
@@ -68,7 +69,8 @@ minimumUnvisited(int (&distance)[BOXES_ROW][BOXES_COL],
 
 void walk(Dir direction, MinimumPoint node,
           int (&distance)[BOXES_ROW][BOXES_COL],
-          Point (&prev)[BOXES_ROW][BOXES_COL]) {
+          Point (&prev)[BOXES_ROW][BOXES_COL],
+          bool (&walled)[BOXES_ROW][BOXES_COL]) {
 
   Point p;
   if (direction == Dir::up) {
@@ -81,7 +83,8 @@ void walk(Dir direction, MinimumPoint node,
     p = {node.x + 1, node.y};
   }
 
-  if (p.x > BOXES_ROW - 1 || p.x < 0 || p.y > BOXES_COL - 1 || p.y < 0) {
+  if (p.x > BOXES_ROW - 1 || p.x < 0 || p.y > BOXES_COL - 1 || p.y < 0 ||
+      walled[p.x][p.y]) {
     return;
   }
 
@@ -92,7 +95,8 @@ void walk(Dir direction, MinimumPoint node,
   }
 }
 
-int dijkstra(Point start, vector<Point> &animationBuffer) {
+int dijkstra(Point start, vector<Point> &animationBuffer,
+             bool (&walled)[BOXES_ROW][BOXES_COL]) {
   bool visitedRecord[BOXES_ROW][BOXES_COL];
   int distance[BOXES_ROW][BOXES_COL];
   Point prev[BOXES_ROW][BOXES_COL];
@@ -111,7 +115,7 @@ int dijkstra(Point start, vector<Point> &animationBuffer) {
 
   distance[start.x][start.y] = 0;
   int loopCounter = 0;
-  while (!allVisited(visitedRecord)) {
+  while (!allVisited(visitedRecord, walled)) {
     loopCounter++;
     MinimumPoint node = minimumUnvisited(distance, visitedRecord);
     // cout << node.x << " " << node.y << endl;
@@ -119,10 +123,10 @@ int dijkstra(Point start, vector<Point> &animationBuffer) {
     if (node.distance == INT_MAX)
       break;
 
-    walk(Dir::up, node, distance, prev);
-    walk(Dir::down, node, distance, prev);
-    walk(Dir::left, node, distance, prev);
-    walk(Dir::right, node, distance, prev);
+    walk(Dir::up, node, distance, prev, walled);
+    walk(Dir::down, node, distance, prev, walled);
+    walk(Dir::left, node, distance, prev, walled);
+    walk(Dir::right, node, distance, prev, walled);
 
     visitedRecord[node.x][node.y] = true;
     if (node.x == endingPointX && node.y == endingPointY) {
@@ -133,7 +137,7 @@ int dijkstra(Point start, vector<Point> &animationBuffer) {
       animationBuffer.push_back({node.x, node.y});
     }
   }
-  if (allVisited(visitedRecord)) {
+  if (allVisited(visitedRecord, walled)) {
     cout << "All" << endl;
   }
   return distance[endingPointX][endingPointY] + 1;
@@ -225,7 +229,16 @@ int main() {
 
   initGraph(graph);
   vector<Point> animationBuffer;
-  cout << dijkstra({startingPointX, startingPointY}, animationBuffer);
+
+  bool walled[BOXES_ROW][BOXES_COL];
+  for (int i = 0; i < BOXES_ROW; i++) {
+    for (int j = 0; j < BOXES_COL; j++) {
+      walled[i][j] = false;
+    }
+  }
+
+  cout << dijkstra({startingPointX, startingPointY}, animationBuffer, walled);
+
   int counter = 0;
   int speed = 0;
   while (window.isOpen()) {
