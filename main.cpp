@@ -242,7 +242,7 @@ int main() {
     // starting and ending point
     drawAnimation(&window, animationBuffer, counter);
 
-    if (speed % 3 == 0) {
+    if (speed % 5 == 0) {
       counter++;
     }
     speed++;
