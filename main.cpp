@@ -2,6 +2,7 @@
 #include "SFML/Graphics/RenderWindow.hpp"
 #include "SFML/System/Vector2.hpp"
 #include <SFML/Graphics.hpp>
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
@@ -24,7 +25,6 @@ int startingPointX = 5;
 int startingPointY = 10;
 int endingPointX = 30;
 int endingPointY = 10;
-
 bool isDragging_start = false; 
 bool isDragging_end = false; 
 int isbuildingWall = 0;
@@ -32,7 +32,7 @@ int dragOffsetStartX = 0;
 int dragOffsetStartY = 0; 
 int dragOffsetEndX = 0;
 int dragOffsetEndY = 0;
-
+bool walled[BOXES_ROW][BOXES_COL];
 enum Dir { up = 1, down, left, right };
 
 struct Point {
@@ -46,19 +46,23 @@ struct MinimumPoint {
   int distance;
 };
 
-bool allVisited(bool (&visitedRecord)[BOXES_ROW][BOXES_COL]) {
+bool allVisited(bool (&visitedRecord)[BOXES_ROW][BOXES_COL],
+                bool (&walled)[BOXES_ROW][BOXES_COL]) {
+
   for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
-      if (visitedRecord[i][j] == false)
+      if (visitedRecord[i][j] == false && !walled[i][j])
         return false;
     }
   }
+
   return true;
 }
 
 struct MinimumPoint
 minimumUnvisited(int (&distance)[BOXES_ROW][BOXES_COL],
                  bool (&visitedRecord)[BOXES_ROW][BOXES_COL]) {
+
   MinimumPoint shortest = {0, 0, INT_MAX};
 
   for (int i = 0; i < BOXES_ROW; i++) {
@@ -73,7 +77,9 @@ minimumUnvisited(int (&distance)[BOXES_ROW][BOXES_COL],
 
 void walk(Dir direction, MinimumPoint node,
           int (&distance)[BOXES_ROW][BOXES_COL],
-          Point (&prev)[BOXES_ROW][BOXES_COL], bool (&walled)[BOXES_ROW][BOXES_COL]) {
+          Point (&prev)[BOXES_ROW][BOXES_COL],
+          bool (&walled)[BOXES_ROW][BOXES_COL]) {
+
   Point p;
   if (direction == Dir::up) {
     p = {node.x, node.y - 1};
@@ -85,7 +91,8 @@ void walk(Dir direction, MinimumPoint node,
     p = {node.x + 1, node.y};
   }
 
-  if (p.x > BOXES_ROW - 1 || p.x < 0 || p.y > BOXES_COL - 1 || p.y < 0 || walled[p.x][p.y]) {
+  if (p.x > BOXES_ROW - 1 || p.x < 0 || p.y > BOXES_COL - 1 || p.y < 0 ||
+      walled[p.x][p.y]) {
     return;
   }
 
@@ -96,22 +103,30 @@ void walk(Dir direction, MinimumPoint node,
   }
 }
 
-int dijkstra(Point start, vector<Point> &animationBuffer, bool (&walled)[BOXES_ROW][BOXES_COL]) {
-  bool visitedRecord[BOXES_ROW][BOXES_COL] = {false};
+int dijkstra(Point start, vector<Point> &animationBuffer,
+             bool (&walled)[BOXES_ROW][BOXES_COL], vector<Point> &path) {
+  bool visitedRecord[BOXES_ROW][BOXES_COL];
   int distance[BOXES_ROW][BOXES_COL];
   Point prev[BOXES_ROW][BOXES_COL];
+
+  for (int i = 0; i < BOXES_ROW; i++) {
+    for (int j = 0; j < BOXES_COL; j++) {
+      visitedRecord[i][j] = false;
+    }
+  }
 
   for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
       distance[i][j] = INT_MAX;
     }
   }
-
+  bool found = true;
   distance[start.x][start.y] = 0;
   int loopCounter = 0;
-  while (!allVisited(visitedRecord)) {
+  while (!allVisited(visitedRecord, walled)) {
     loopCounter++;
     MinimumPoint node = minimumUnvisited(distance, visitedRecord);
+    // cout << node.x << " " << node.y << endl;
 
     if (node.distance == INT_MAX)
       break;
@@ -123,38 +138,45 @@ int dijkstra(Point start, vector<Point> &animationBuffer, bool (&walled)[BOXES_R
 
     visitedRecord[node.x][node.y] = true;
     if (node.x == endingPointX && node.y == endingPointY) {
+      // found the node
+
+      found = true;
       cout << "Found " << distance[node.x][node.y] << endl;
       break;
     } else {
       animationBuffer.push_back({node.x, node.y});
     }
   }
-  if (allVisited(visitedRecord)) {
+  if (allVisited(visitedRecord, walled)) {
     cout << "All" << endl;
   }
+
+  Point node = {endingPointX, endingPointY};
+
+  while (!(node.x == startingPointX && node.y == startingPointY)) {
+    path.push_back(node);
+    node = prev[node.x][node.y];
+  }
+  path.push_back({startingPointX, startingPointY});
+  reverse(path.begin(), path.end());
   return distance[endingPointX][endingPointY] + 1;
 }
 
-void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL], bool (&walled)[BOXES_ROW][BOXES_COL]) {
+void drawGrid(RenderWindow *window, bool (&walled)[BOXES_ROW][BOXES_COL]) {
+
   int startX = PADDING_LEFT_RIGHT;
   int startY = PADDING_TOP_BOTTOM;
 
   for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
+
       int x = startX + i * SQUARE_BOX;
       int y = startY + j * SQUARE_BOX;
 
       sf::IntRect rect({x, y}, {SQUARE_BOX, SQUARE_BOX});
       sf::RectangleShape drawableRect(sf::Vector2f(SQUARE_BOX, SQUARE_BOX));
       drawableRect.setPosition(sf::Vector2f(x, y));
-      
-      // Wall drawing
-      if (walled[i][j]) {
-        drawableRect.setFillColor(sf::Color(128, 128, 128)); 
-      } else {
-        drawableRect.setFillColor(sf::Color::Green);
-      }
-      
+      drawableRect.setFillColor(sf::Color::Green);
       window->draw(drawableRect);
 
       if (i == startingPointX && j == startingPointY) {
@@ -169,7 +191,16 @@ void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL], bool
         drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
         drawableRect1.setFillColor(sf::Color::Blue);
         window->draw(drawableRect1);
-      } else if (!walled[i][j]) {
+      } else if (walled[i][j]) {
+
+        sf::RectangleShape drawableRect1(
+            sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
+        drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
+        drawableRect1.setFillColor(sf::Color::Magenta);
+        window->draw(drawableRect1);
+
+      } else {
+
         sf::RectangleShape drawableRect1(
             sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
         drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
@@ -180,23 +211,16 @@ void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL], bool
   }
 }
 
-void initGraph(IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
-  int startX = PADDING_LEFT_RIGHT;
-  int startY = PADDING_TOP_BOTTOM;
-
-  for (int j = 0; j < BOXES_ROW; j++) {
-    for (int i = 0; i < BOXES_COL; i++) {
-      int x = startX + i * SQUARE_BOX;
-      int y = startY + j * SQUARE_BOX;
-      IntRect rect({x + BORDER, y + BORDER},
-                   {SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER});
-    }
-  }
-}
-
 void drawAnimation(RenderWindow *window, vector<Point> &animationBuffer,
-                   int counter) {
-  for (int i = 0; i < animationBuffer.size() && i < counter; i++) {
+                   vector<Point> &path, int counter) {
+
+  int pointsCounter = 0;
+
+  for (int i = 0; i < animationBuffer.size(); i++) {
+
+    if (pointsCounter > counter)
+      return;
+    pointsCounter++;
     Point p = animationBuffer[i];
     int startX = PADDING_LEFT_RIGHT;
     int startY = PADDING_TOP_BOTTOM;
@@ -213,192 +237,257 @@ void drawAnimation(RenderWindow *window, vector<Point> &animationBuffer,
       window->draw(drawableRect1);
     }
   }
-}
 
-int main() {
-  RenderWindow window(sf::VideoMode({WIDTH, HEIGHT}), "Path Finding Algorithm");
-  IntRect graph[BOXES_ROW][BOXES_COL];
-  bool animationStarted = false;
-  bool walled[BOXES_ROW][BOXES_COL] = {false};
+  for (int i = 0; i < path.size(); i++) {
 
-  // Speed control buttons
-  RectangleShape startButton(Vector2f(200, 50));
-  startButton.setPosition(sf::Vector2f(WIDTH / 2 - 100, HEIGHT - 70));
-  startButton.setFillColor(Color::Green);
+    if (pointsCounter > counter)
+      return;
 
-  RectangleShape resetButton(Vector2f(200, 50));
-  resetButton.setPosition(sf::Vector2f(WIDTH / 2 - 100, HEIGHT - 140));
-  resetButton.setFillColor(Color::Red);
+    pointsCounter++;
+    Point p = path[i];
+    int startX = PADDING_LEFT_RIGHT;
+    int startY = PADDING_TOP_BOTTOM;
 
-  RectangleShape speedButton1x(Vector2f(80, 40));
-  speedButton1x.setPosition(sf::Vector2f(WIDTH / 2 - 120, HEIGHT - 140));
-  speedButton1x.setFillColor(Color::Cyan);
+    int x = startX + p.x * SQUARE_BOX;
+    int y = startY + p.y * SQUARE_BOX;
 
-  RectangleShape speedButton05x(Vector2f(80, 40));
-  speedButton05x.setPosition(sf::Vector2f(WIDTH / 2, HEIGHT - 140));
-  speedButton05x.setFillColor(Color::Magenta);
-
-  RectangleShape speedButton025x(Vector2f(80, 40));
-  speedButton025x.setPosition(sf::Vector2f(WIDTH / 2 + 120, HEIGHT - 140));
-  speedButton025x.setFillColor(Color::Yellow);
-
-  // Text for speed buttons (YO CHAHI DON'T USE UNLESS TIMRO MA NI MERO JASTAI ERROR AAUXA HAHAHA)
-  // Font font;
-  // if (!font.loadFromFile("arial.ttf")) {
-  //   cout << "Error loading font" << endl;
-  //   return -1;
-  // }
-
-  // Text text1x("1x", font, 20);
-  // text1x.setPosition(WIDTH / 2 - 110, HEIGHT - 130);
-  // text1x.setFillColor(Color::Black);
-
-  // Text text05x("0.5x", font, 20);
-  // text05x.setPosition(WIDTH / 2 + 10, HEIGHT - 130);
-  // text05x.setFillColor(Color::Black);
-
-  // Text text025x("0.25x", font, 20);
-  // text025x.setPosition(WIDTH / 2 + 130, HEIGHT - 130);
-  // text025x.setFillColor(Color::Black);
-
-  initGraph(graph);
-  vector<Point> animationBuffer;
-  int counter = 0;
-  int speed = 0;
-  int speedMode = 5; // Default speed mode
-
-  while (window.isOpen()) {
-    while (const std::optional event = window.pollEvent()) {
-      if (event->is<Event::Closed>())
-        window.close();
-
-      if (event->is<Event::MouseButtonPressed>()) {
-        Vector2i mousePos = Mouse::getPosition(window);
-
-         if (resetButton.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
-          memset(walled, 0, sizeof(walled));
-          animationBuffer.clear();
-          animationStarted = false;
-          counter = 0;
-          speed = 0;
-          speedMode = 5;
-        }
-         if (startButton.getGlobalBounds().contains(window.mapPixelToCoords(Mouse::getPosition(window)))) {
-          animationStarted = true;
-          animationBuffer.clear(); // Clear previous animation
-          dijkstra({startingPointX, startingPointY}, animationBuffer, walled);
-        }
-
-        // Speed button interactions
-        if (speedButton1x.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
-          speedMode = 5; 
-        }
-        else if (speedButton05x.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
-          speedMode = 10;
-        }
-        else if (speedButton025x.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
-          speedMode = 20;
-        }
-
-        if (startButton.getGlobalBounds().contains(window.mapPixelToCoords(Mouse::getPosition(window)))) {
-          animationStarted = true;
-          animationBuffer.clear(); 
-          dijkstra({startingPointX, startingPointY}, animationBuffer, walled);
-        }
-
-        // Start point dragging
-        if (mousePos.x >= PADDING_LEFT_RIGHT + startingPointX * SQUARE_BOX &&
-            mousePos.x <= PADDING_LEFT_RIGHT + (startingPointX + 1) * SQUARE_BOX &&
-            mousePos.y >= PADDING_TOP_BOTTOM + startingPointY * SQUARE_BOX &&
-            mousePos.y <= PADDING_TOP_BOTTOM + (startingPointY + 1) * SQUARE_BOX) {
-          
-          isDragging_start = true;
-          dragOffsetStartX = mousePos.x - (PADDING_LEFT_RIGHT + startingPointX * SQUARE_BOX);
-          dragOffsetStartY = mousePos.y - (PADDING_TOP_BOTTOM + startingPointY * SQUARE_BOX);
-        }
-        // End point dragging
-        else if (mousePos.x >= PADDING_LEFT_RIGHT + endingPointX * SQUARE_BOX &&
-          mousePos.x <= PADDING_LEFT_RIGHT + (endingPointX + 1) * SQUARE_BOX &&
-          mousePos.y >= PADDING_TOP_BOTTOM + endingPointY * SQUARE_BOX &&
-          mousePos.y <= PADDING_TOP_BOTTOM + (endingPointY + 1) * SQUARE_BOX) {
-          
-          isDragging_end = true;
-          dragOffsetEndX = mousePos.x - (PADDING_LEFT_RIGHT + endingPointX * SQUARE_BOX);
-          dragOffsetEndY = mousePos.y - (PADDING_TOP_BOTTOM + endingPointY * SQUARE_BOX);
-        }
-        else {
-          isbuildingWall = 1;
-        }
-      }
-
-      if (event->is<Event::MouseButtonReleased>()) {
-        isDragging_end = false;
-        isDragging_start = false;
-        isbuildingWall = 0;
-      }
-
-      if (event->is<Event::MouseMoved>()) {
-        Vector2i mousePos = Mouse::getPosition(window);
-        
-        if (isDragging_start) {
-        int newStartX = (mousePos.x - dragOffsetStartX - PADDING_LEFT_RIGHT) / SQUARE_BOX;
-          int newStartY = (mousePos.y - dragOffsetStartY - PADDING_TOP_BOTTOM) / SQUARE_BOX;
-
-          if (newStartX >= 0 && newStartX < BOXES_ROW && newStartY >= 0 && newStartY < BOXES_COL) {
-            startingPointX = newStartX;
-            startingPointY = newStartY;
-          }
-        }
-
-        if (isDragging_end) {
-          int newEndX = (mousePos.x - dragOffsetEndX - PADDING_LEFT_RIGHT) / SQUARE_BOX;
-          int newEndY = (mousePos.y - dragOffsetEndY - PADDING_TOP_BOTTOM) / SQUARE_BOX;
-          
-          if (newEndX >= 0 && newEndX < BOXES_ROW && newEndY >= 0 && newEndY < BOXES_COL) {
-            endingPointX = newEndX;
-            endingPointY = newEndY;
-          }
-        }
-
-        if (isbuildingWall) {
-          int gridX = (mousePos.x - PADDING_LEFT_RIGHT) / SQUARE_BOX;
-          int gridY = (mousePos.y - PADDING_TOP_BOTTOM) / SQUARE_BOX;
-
-          if (gridX >= 0 && gridX < BOXES_ROW && gridY >= 0 && gridY < BOXES_COL) {
-            if (!(gridX == startingPointX && gridY == startingPointY) && 
-                !(gridX == endingPointX && gridY == endingPointY)) {
-              walled[gridX][gridY] = !walled[gridX][gridY];
-            }
-          }
-        }
-      }
-
-      window.clear(Color::Black);
-
-      drawGrid(&window, graph, walled);
-
-      window.draw(startButton);
-      window.draw(resetButton);
-
-      window.draw(speedButton1x);
-      window.draw(speedButton05x);
-      window.draw(speedButton025x);
-
-      window.draw(text1x);
-      window.draw(text05x);
-      window.draw(text025x);
-
-      if (animationStarted) {
-        if (speed % speedMode == 0) {
-          counter++;
-        }
-        drawAnimation(&window, animationBuffer, counter);
-      }
-
-      speed++;
-      window.display();
+    if (!(p.x == startingPointX && p.y == startingPointY) &&
+        !(p.x == endingPointX && p.y == endingPointY)) {
+      sf::RectangleShape drawableRect1(
+          sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
+      drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
+      drawableRect1.setFillColor(sf::Color::Cyan);
+      window->draw(drawableRect1);
     }
   }
+}
+void initwalls(){
+  for (int i = 0; i < BOXES_ROW; i++) {
+    for (int j = 0; j < BOXES_COL; j++) {
+      walled[i][j] = false;
+      // Test wall
+      // if (i == 15 && j != 0) {
+      //   walled[i][j] = true;
+      // }
+    }
+  }
+}
+int main() {
 
-  return 0;
+  RenderWindow window(sf::VideoMode({WIDTH, HEIGHT}), "Path Finding Algorithm");
+
+  vector<Point> animationBuffer;
+
+  sf::Font font;
+  font.loadFromFile("font.ttf"); // You must provide the correct font path!
+
+  // Start & Reset Buttons (Above the Grid)
+  sf::RectangleShape startButton(sf::Vector2f(200, 50));
+  startButton.setPosition(sf::Vector2f(WIDTH / 2 - 220, PADDING_TOP_BOTTOM / 2 - 25));
+  startButton.setFillColor(sf::Color::Green);
+
+  sf::Text startText;
+  startText.setFont(font);
+  startText.setString("START");
+  startText.setCharacterSize(24);
+  startText.setFillColor(sf::Color::Black);
+  startText.setPosition(startButton.getPosition().x + 60, startButton.getPosition().y + 10);
+
+  sf::RectangleShape resetButton(sf::Vector2f(200, 50));
+  resetButton.setPosition(sf::Vector2f(WIDTH / 2 + 20, PADDING_TOP_BOTTOM / 2 - 25));
+  resetButton.setFillColor(sf::Color::Red);
+
+  sf::Text resetText;
+  resetText.setFont(font);
+  resetText.setString("RESET");
+  resetText.setCharacterSize(24);
+  resetText.setFillColor(sf::Color::Black);
+  resetText.setPosition(resetButton.getPosition().x + 60, resetButton.getPosition().y + 10);
+
+  // Speed Buttons (Below the Grid)
+  sf::RectangleShape speedButton1x(sf::Vector2f(80, 40));
+  speedButton1x.setPosition(sf::Vector2f(WIDTH / 2 - 120, HEIGHT - PADDING_TOP_BOTTOM / 2 - 20));
+  speedButton1x.setFillColor(sf::Color::Cyan);
+
+  sf::Text speedText1x;
+  speedText1x.setFont(font);
+  speedText1x.setString("1x");
+  speedText1x.setCharacterSize(20);
+  speedText1x.setFillColor(sf::Color::Black);
+  speedText1x.setPosition(speedButton1x.getPosition().x + 25, speedButton1x.getPosition().y + 10);
+
+  sf::RectangleShape speedButton05x(sf::Vector2f(80, 40));
+  speedButton05x.setPosition(sf::Vector2f(WIDTH / 2, HEIGHT - PADDING_TOP_BOTTOM / 2 - 20));
+  speedButton05x.setFillColor(sf::Color::Magenta);
+
+  sf::Text speedText05x;
+  speedText05x.setFont(font);
+  speedText05x.setString("0.5x");
+  speedText05x.setCharacterSize(20);
+  speedText05x.setFillColor(sf::Color::Black);
+  speedText05x.setPosition(speedButton05x.getPosition().x + 15, speedButton05x.getPosition().y + 10);
+
+  sf::RectangleShape speedButton025x(sf::Vector2f(80, 40));
+  speedButton025x.setPosition(sf::Vector2f(WIDTH / 2 + 120, HEIGHT - PADDING_TOP_BOTTOM / 2 - 20));
+  speedButton025x.setFillColor(sf::Color::Yellow);
+
+  sf::Text speedText025x;
+  speedText025x.setFont(font);
+  speedText025x.setString("0.25x");
+  speedText025x.setCharacterSize(20);
+  speedText025x.setFillColor(sf::Color::Black);
+  speedText025x.setPosition(speedButton025x.getPosition().x + 10, speedButton025x.getPosition().y + 10);
+
+  vector<Point> path;
+
+  initwalls();
+
+  
+
+  int counter = 0;
+  int speed = 0;
+  int speedMode = 5;
+  bool animationStarted = false;
+  while (window.isOpen()) {
+    sf::Event event;  // Declare an sf::Event object to hold event data
+    while (window.pollEvent(event)) {
+      if (event.type == sf::Event::Closed) {
+          window.close();
+      }
+  
+      if (event.type == sf::Event::MouseButtonPressed) {
+          sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+          
+          if (resetButton.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
+              animationBuffer.clear();
+              animationStarted = false;
+              counter = 0;
+              speed = 0;
+              speedMode = 5;
+              initwalls();
+              path.clear();
+          }
+  
+          // Speed button interactions
+          if (speedButton1x.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
+              speedMode = 5;
+          } 
+          else if (speedButton05x.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
+              speedMode = 10;
+          } 
+          else if (speedButton025x.getGlobalBounds().contains(window.mapPixelToCoords(mousePos))) {
+              speedMode = 20;
+          }
+  
+          if (startButton.getGlobalBounds().contains(window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+              animationStarted = true;
+              animationBuffer.clear(); 
+              dijkstra({startingPointX, startingPointY}, animationBuffer, walled,path);
+          }
+  
+          // Start point dragging
+          if(animationStarted){
+            continue;
+          }
+          
+          if (mousePos.x >= PADDING_LEFT_RIGHT + startingPointX * SQUARE_BOX &&
+              mousePos.x <= PADDING_LEFT_RIGHT + (startingPointX + 1) * SQUARE_BOX &&
+              mousePos.y >= PADDING_TOP_BOTTOM + startingPointY * SQUARE_BOX &&
+              mousePos.y <= PADDING_TOP_BOTTOM + (startingPointY + 1) * SQUARE_BOX) {
+            
+              isDragging_start = true;
+              dragOffsetStartX = mousePos.x - (PADDING_LEFT_RIGHT + startingPointX * SQUARE_BOX);
+              dragOffsetStartY = mousePos.y - (PADDING_TOP_BOTTOM + startingPointY * SQUARE_BOX);
+          }
+          // End point dragging
+          else if (mousePos.x >= PADDING_LEFT_RIGHT + endingPointX * SQUARE_BOX &&
+                   mousePos.x <= PADDING_LEFT_RIGHT + (endingPointX + 1) * SQUARE_BOX &&
+                   mousePos.y >= PADDING_TOP_BOTTOM + endingPointY * SQUARE_BOX &&
+                   mousePos.y <= PADDING_TOP_BOTTOM + (endingPointY + 1) * SQUARE_BOX) {
+            
+              isDragging_end = true;
+              dragOffsetEndX = mousePos.x - (PADDING_LEFT_RIGHT + endingPointX * SQUARE_BOX);
+              dragOffsetEndY = mousePos.y - (PADDING_TOP_BOTTOM + endingPointY * SQUARE_BOX);
+          }
+          else {
+              isbuildingWall = true;
+          }
+      }
+  
+      if (event.type == sf::Event::MouseButtonReleased) {
+          isDragging_end = false;
+          isDragging_start = false;
+          isbuildingWall = false;
+      }
+  
+      if (event.type == sf::Event::MouseMoved) {
+          sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+  
+          if (isDragging_start) {
+              int newStartX = (mousePos.x - dragOffsetStartX - PADDING_LEFT_RIGHT) / SQUARE_BOX;
+              int newStartY = (mousePos.y - dragOffsetStartY - PADDING_TOP_BOTTOM) / SQUARE_BOX;
+  
+              if (newStartX >= 0 && newStartX < BOXES_ROW && newStartY >= 0 && newStartY < BOXES_COL) {
+                  startingPointX = newStartX;
+                  startingPointY = newStartY;
+              }
+          }
+  
+          if (isDragging_end) {
+              int newEndX = (mousePos.x - dragOffsetEndX - PADDING_LEFT_RIGHT) / SQUARE_BOX;
+              int newEndY = (mousePos.y - dragOffsetEndY - PADDING_TOP_BOTTOM) / SQUARE_BOX;
+  
+              if (newEndX >= 0 && newEndX < BOXES_ROW && newEndY >= 0 && newEndY < BOXES_COL) {
+                  endingPointX = newEndX;
+                  endingPointY = newEndY;
+              }
+          }
+  
+          if (isbuildingWall) {
+              int gridX = (mousePos.x - PADDING_LEFT_RIGHT) / SQUARE_BOX;
+              int gridY = (mousePos.y - PADDING_TOP_BOTTOM) / SQUARE_BOX;
+  
+              if (gridX >= 0 && gridX < BOXES_ROW && gridY >= 0 && gridY < BOXES_COL) {
+                  if (!(gridX == startingPointX && gridY == startingPointY) &&
+                      !(gridX == endingPointX && gridY == endingPointY)) {
+                      walled[gridX][gridY] = !walled[gridX][gridY];
+                  }
+              }
+          }
+      }
+  }
+  
+    
+  
+    window.clear(sf::Color::White);
+  
+    // Draw Start
+    drawGrid(&window, walled);
+    // Draw buttons
+    window.draw(startButton);
+    window.draw(resetButton);
+    window.draw(speedButton1x);
+    window.draw(speedButton05x);
+    window.draw(speedButton025x);
+
+    // Draw text on buttons
+    window.draw(startText);
+    window.draw(resetText);
+    window.draw(speedText1x);
+    window.draw(speedText05x);
+    window.draw(speedText025x);
+    if(animationStarted==true){
+      drawAnimation(&window, animationBuffer, path, counter);
+      if (speed % speedMode == 0) {
+        counter++;
+      }
+      speed++;
+
+    }
+    
+  
+    // Draw Stop
+    window.display();
+  }
+  
 }
