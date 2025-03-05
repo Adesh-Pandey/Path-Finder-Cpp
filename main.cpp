@@ -2,6 +2,7 @@
 #include "SFML/Graphics/RenderWindow.hpp"
 #include "SFML/System/Vector2.hpp"
 #include <SFML/Graphics.hpp>
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
@@ -96,7 +97,7 @@ void walk(Dir direction, MinimumPoint node,
 }
 
 int dijkstra(Point start, vector<Point> &animationBuffer,
-             bool (&walled)[BOXES_ROW][BOXES_COL]) {
+             bool (&walled)[BOXES_ROW][BOXES_COL], vector<Point> &path) {
   bool visitedRecord[BOXES_ROW][BOXES_COL];
   int distance[BOXES_ROW][BOXES_COL];
   Point prev[BOXES_ROW][BOXES_COL];
@@ -112,7 +113,7 @@ int dijkstra(Point start, vector<Point> &animationBuffer,
       distance[i][j] = INT_MAX;
     }
   }
-
+  bool found = true;
   distance[start.x][start.y] = 0;
   int loopCounter = 0;
   while (!allVisited(visitedRecord, walled)) {
@@ -131,6 +132,8 @@ int dijkstra(Point start, vector<Point> &animationBuffer,
     visitedRecord[node.x][node.y] = true;
     if (node.x == endingPointX && node.y == endingPointY) {
       // found the node
+
+      found = true;
       cout << "Found " << distance[node.x][node.y] << endl;
       break;
     } else {
@@ -140,10 +143,19 @@ int dijkstra(Point start, vector<Point> &animationBuffer,
   if (allVisited(visitedRecord, walled)) {
     cout << "All" << endl;
   }
+
+  Point node = {endingPointX, endingPointY};
+
+  while (!(node.x == startingPointX && node.y == startingPointY)) {
+    path.push_back(node);
+    node = prev[node.x][node.y];
+  }
+  path.push_back({startingPointX, startingPointY});
+  reverse(path.begin(), path.end());
   return distance[endingPointX][endingPointY] + 1;
 }
 
-void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
+void drawGrid(RenderWindow *window, bool (&walled)[BOXES_ROW][BOXES_COL]) {
 
   int startX = PADDING_LEFT_RIGHT;
   int startY = PADDING_TOP_BOTTOM;
@@ -172,6 +184,14 @@ void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
         drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
         drawableRect1.setFillColor(sf::Color::Blue);
         window->draw(drawableRect1);
+      } else if (walled[i][j]) {
+
+        sf::RectangleShape drawableRect1(
+            sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
+        drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
+        drawableRect1.setFillColor(sf::Color::Magenta);
+        window->draw(drawableRect1);
+
       } else {
 
         sf::RectangleShape drawableRect1(
@@ -184,26 +204,16 @@ void drawGrid(RenderWindow *window, IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
   }
 }
 
-void initGraph(IntRect (&graph)[BOXES_ROW][BOXES_COL]) {
-  int startX = PADDING_LEFT_RIGHT;
-  int startY = PADDING_TOP_BOTTOM;
-
-  for (int j = 0; j < BOXES_ROW; j++) {
-    for (int i = 0; i < BOXES_COL; i++) {
-
-      int x = startX + i * SQUARE_BOX;
-      int y = startY + j * SQUARE_BOX;
-      IntRect rect({x + BORDER, y + BORDER},
-                   {SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER});
-      // graph[x][y] = rect;
-    }
-  }
-}
-
 void drawAnimation(RenderWindow *window, vector<Point> &animationBuffer,
-                   int counter) {
+                   vector<Point> &path, int counter) {
 
-  for (int i = 0; i < animationBuffer.size() && i < counter; i++) {
+  int pointsCounter = 0;
+
+  for (int i = 0; i < animationBuffer.size(); i++) {
+
+    if (pointsCounter > counter)
+      return;
+    pointsCounter++;
     Point p = animationBuffer[i];
     int startX = PADDING_LEFT_RIGHT;
     int startY = PADDING_TOP_BOTTOM;
@@ -220,24 +230,52 @@ void drawAnimation(RenderWindow *window, vector<Point> &animationBuffer,
       window->draw(drawableRect1);
     }
   }
+
+  for (int i = 0; i < path.size(); i++) {
+
+    if (pointsCounter > counter)
+      return;
+
+    pointsCounter++;
+    Point p = path[i];
+    int startX = PADDING_LEFT_RIGHT;
+    int startY = PADDING_TOP_BOTTOM;
+
+    int x = startX + p.x * SQUARE_BOX;
+    int y = startY + p.y * SQUARE_BOX;
+
+    if (!(p.x == startingPointX && p.y == startingPointY) &&
+        !(p.x == endingPointX && p.y == endingPointY)) {
+      sf::RectangleShape drawableRect1(
+          sf::Vector2f(SQUARE_BOX - 2 * BORDER, SQUARE_BOX - 2 * BORDER));
+      drawableRect1.setPosition(sf::Vector2f(x + BORDER, y + BORDER));
+      drawableRect1.setFillColor(sf::Color::Cyan);
+      window->draw(drawableRect1);
+    }
+  }
 }
 
 int main() {
 
   RenderWindow window(sf::VideoMode({WIDTH, HEIGHT}), "Path Finding Algorithm");
-  IntRect graph[BOXES_ROW][BOXES_COL];
 
-  initGraph(graph);
   vector<Point> animationBuffer;
 
   bool walled[BOXES_ROW][BOXES_COL];
+
+  vector<Point> path;
+
   for (int i = 0; i < BOXES_ROW; i++) {
     for (int j = 0; j < BOXES_COL; j++) {
       walled[i][j] = false;
+      // Test wall
+      // if (i == 15 && j != 0) {
+      //   walled[i][j] = true;
+      // }
     }
   }
 
-  cout << dijkstra({startingPointX, startingPointY}, animationBuffer, walled);
+  dijkstra({startingPointX, startingPointY}, animationBuffer, walled, path);
 
   int counter = 0;
   int speed = 0;
@@ -250,12 +288,12 @@ int main() {
     window.clear(Color::Black);
 
     // Draw Start
-    drawGrid(&window, graph);
+    drawGrid(&window, walled);
 
     // starting and ending point
-    drawAnimation(&window, animationBuffer, counter);
+    drawAnimation(&window, animationBuffer, path, counter);
 
-    if (speed % 5 == 0) {
+    if (speed % 8 == 0) {
       counter++;
     }
     speed++;
