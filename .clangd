@@ -1,5 +1,5 @@
 CompileFlags:
   Add: [
-   "-I/opt/homebrew/Cellar/sfml/3.0.0_1/include",
+   "-I/opt/homebrew/Cellar/sfml@2/2.6.2_1/include",
     "-std=c++20"  
 ]
